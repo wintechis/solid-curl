@@ -1,0 +1,19 @@
+{
+  "name": "solid-curl",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@inrupt/solid-client-authn-node": "^1.11.2",
+    "express": "^4.17.1",
+    "install": "^0.13.0",
+    "npm": "^8.2.0",
+    "puppeteer": "^13.0.0",
+    "puppeteer-core": "^13.0.0",
+  }
+}
