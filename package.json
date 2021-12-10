@@ -15,5 +15,6 @@
     "npm": "^8.2.0",
     "puppeteer": "^13.0.0",
     "puppeteer-core": "^13.0.0",
+    "readline-sync": "^1.4.10"
   }
 }
