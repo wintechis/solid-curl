@@ -46,8 +46,23 @@ app.get("/", async (req, res, next) => {
 });
 server = app.listen(8988);
 
+// Try to load credentials from config
+let config = null;
+try {
+	config = require('./.solid-curl-config.json');
+} catch (e) {
+    if (e.code !== 'MODULE_NOT_FOUND') {
+        throw e;
+    }
+}
+const {
+	oidcProvider: configOidcProvider,
+	email: configEmail,
+	password: configPassword,
+} = config;
+
 // Log in
-let oidcIssuer = readlineSync.question(`Solid OIDC Provider URI: `);
+let oidcIssuer = configOidcProvider ? configOidcProvider : readlineSync.question(`Solid OIDC Provider URI: `);
 session.login({
 	redirectUrl: 'http://localhost:8988/',
 	oidcIssuer: oidcIssuer,
@@ -62,19 +77,18 @@ async function handleRedirect(url) {
 	let emailField = await page.$('#email');
 	if(emailField) {
 		let emailLabel = await page.$eval('label[for=email]', el => el.innerHTML);
-		let email = readlineSync.question(`${emailLabel}: `);
+		let email = configEmail ? configEmail : readlineSync.question(`${emailLabel}: `);
 		await emailField.type(email);
 	}
 
 	let passwordField = await page.$('#password');
 	if(passwordField) {
 		let passwordLabel = await page.$eval('label[for=password]', el => el.innerHTML);
-		let password = readlineSync.question(`${passwordLabel}: `, {
+		let password = configPassword ? configPassword : readlineSync.question(`${passwordLabel}: `, {
 			hideEchoBack: true,
 		});
 		await passwordField.type(password);
 	}
-	process.stdout.write('\n');
 
 	let res = Promise.race([
 		page.waitForResponse(),
