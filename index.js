@@ -58,6 +58,7 @@ try {
 const {
 	oidcProvider: configOidcProvider,
 	email: configEmail,
+	username: configUsername,
 	password: configPassword,
 } = config;
 
@@ -74,11 +75,19 @@ async function handleRedirect(url) {
 	const browser = await puppeteer.launch();
 	const page = await browser.newPage();
 	await page.goto(url);
+
 	let emailField = await page.$('#email');
 	if(emailField) {
 		let emailLabel = await page.$eval('label[for=email]', el => el.innerHTML);
 		let email = configEmail ? configEmail : readlineSync.question(`${emailLabel}: `);
 		await emailField.type(email);
+	}
+
+	let usernameField = await page.$('#username');
+	if(usernameField) {
+		let usernameLabel = await page.$eval('label[for=username]', el => el.innerHTML);
+		let username = configUsername ? configUsername : readlineSync.question(`${usernameLabel}: `);
+		await usernameField.type(username);
 	}
 
 	let passwordField = await page.$('#password');
@@ -90,15 +99,28 @@ async function handleRedirect(url) {
 		await passwordField.type(password);
 	}
 
-	let res = Promise.race([
-		page.waitForResponse(),
+	let resP = Promise.race([
+		page.waitForNavigation(),
 		new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
 	]);
-	page.click('button[type=submit]');
+	await page.click('button[type=submit]');
+	let res = await resP;
 
-	if(await res === null) {
+	if(res === null) {
+		await page.screenshot({ path: 'example.png' });
 		console.error('Authentication did not succeed!');
 		process.exit(1);
+	} else {
+		// node-solid-server may redirect to another form that needs a submit
+		if(res.status() !== 200) {
+			console.error('Authentication did not succeed!');
+			process.exit(1);
+		} else {
+			let submit = await page.$('button[type=submit]')
+			if(submit) {
+				await page.click('button[type=submit]');
+			}
+		}
 	}
 	await browser.close();
 }
