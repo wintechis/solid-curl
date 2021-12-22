@@ -3,6 +3,8 @@ const { Session } = require("@inrupt/solid-client-authn-node");
 const puppeteer = require('puppeteer');
 const process = require('process');
 const readlineSync = require('readline-sync');
+const { program } = require('commander');
+const { createReadStream } = require("fs");
 
 // Remove draft warning from oidc-client lib
 process.emitWarning = (warning, ...args) => {
@@ -12,115 +14,151 @@ process.emitWarning = (warning, ...args) => {
 	return emitWarning(warning, ...args);
 };
 
-const session = new Session();
+// Command line arguments
+program
+	.version('0.1.0', '-V, --version', 'Show version number and quit')
+	.argument('<uri>', 'Target URI')
+	.option('-d, --data <data>', 'HTTP POST data')
+	.option('-f, --fail', 'Fail silently (no output at all) on HTTP errors')
+	.option('-H, --header <header...>', 'Add header to request', [])
+	.option('-i, --include', 'Include HTTP response headers in output')
+	.option('-o, --output <file>', 'Write to file instead of stdout')
+	.option('-O, --remote-name', 'Write output to a file named as the remote file')
+	.option('-s, --silent', 'Silent mode')
+	.option('-T, --transfer-file <file>', 'Transfer local FILE to destination')
+	.option('-u, --user <identity>', 'Use identity from config file')
+	.option('-A, --user-agent <name>', 'Send User-Agent <name> to server')
+	.option('-v, --verbose', 'Make the operation more talkative')
+	.option('-X, --request <method>', 'Specify custom request method', 'GET')
+	.action(run);
 
-// Try request without authentication
-session.fetch(process.argv[2], {
-	method: 'HEAD',
-}).then(async res => {
-	if(res.status !== 401) {
-		// No 401 Unauthenticated so do real request and exit
-		session.fetch(process.argv[2]).then(async res => {
+program.parseAsync();
+
+async function run(uri, options, command) {
+	const session = new Session();
+	let fetchInit = {
+		method: options.method
+	};
+
+	// Transforming headers into format needed by fetch
+	let headers = {};
+	for(let h of options.header) {
+		let split = h.split(':')
+		headers[split[0]] = split.slice(1).join().trim();
+	}
+	fetchInit['headers'] = headers;
+
+	// Loading data from file if necessary
+	let data = options.data?.startsWith('@') ? createReadStream(options.data.substring(1)) : options.data;
+	if(data) {
+		fetchInit['body'] = data;
+		fetchInit['method'] = 'POST';
+	}
+
+	const user = options.user;
+	if(!user) {
+		// Do unauthenticated request when no user is provided
+		const res = await session.fetch(uri, fetchInit);
+		const text = await res.text();
+		console.log(text);
+		process.exit();
+	}
+
+	const app = express();
+	let server = null;
+
+	// Handler for the redirect from the IdP
+	app.get("/", async (req, res, next) => {
+		await session.handleIncomingRedirect(`http://localhost:29884${req.url}`);
+		res.sendStatus(200);
+
+		// Do actual request
+		session.fetch(uri, fetchInit).then(async res => {
 			let text = await res.text();
 			console.log(text);
 			process.exit();
 		});
-	}
-});
-// Else authenticate
-
-const app = express();
-let server = null;
-
-// Handler for the redirect from the IdP
-app.get("/", async (req, res, next) => {
-	await session.handleIncomingRedirect(`http://localhost:8988${req.url}`);
-	res.sendStatus(200);
-
-	// Do actual request
-	session.fetch(process.argv[2]).then(async res => {
-		let text = await res.text();
-		console.log(text);
-		process.exit();
 	});
-});
-server = app.listen(8988);
+	server = app.listen(29884);
 
-// Try to load credentials from config
-let config = null;
-try {
-	config = require('./.solid-curl-config.json');
-} catch (e) {
-    if (e.code !== 'MODULE_NOT_FOUND') {
-        throw e;
-    }
-}
-const {
-	oidcProvider: configOidcProvider,
-	email: configEmail,
-	username: configUsername,
-	password: configPassword,
-} = config;
+	// Try to load credentials from config
+	const config = require('./.solid-curl-ids.json');
+	const {
+		oidcProvider: configOidcProvider,
+		email: configEmail,
+		username: configUsername,
+		password: configPassword,
+	} = config[options.user];
 
-// Log in
-let oidcIssuer = configOidcProvider ? configOidcProvider : readlineSync.question(`Solid OIDC Provider URI: `);
-session.login({
-	redirectUrl: 'http://localhost:8988/',
-	oidcIssuer: oidcIssuer,
-	handleRedirect: handleRedirect,
-})
-
-// Redirect Handler: Fill out the login form
-async function handleRedirect(url) {
-	const browser = await puppeteer.launch();
-	const page = await browser.newPage();
-	await page.goto(url);
-
-	let emailField = await page.$('#email');
-	if(emailField) {
-		let emailLabel = await page.$eval('label[for=email]', el => el.innerHTML);
-		let email = configEmail ? configEmail : readlineSync.question(`${emailLabel}: `);
-		await emailField.type(email);
+	// Log in
+	let oidcIssuer = configOidcProvider ? configOidcProvider : readlineSync.question(`Solid OIDC Provider URI: `);
+	session.login({
+		redirectUrl: 'http://localhost:29884/',
+		oidcIssuer: oidcIssuer,
+		handleRedirect: handleRedirect,
+	});
+		/*
+	} catch (e) {
+		if (e.code !== 'MODULE_NOT_FOUND') {
+			throw e;
+		}
 	}
+	*/
 
-	let usernameField = await page.$('#username');
-	if(usernameField) {
-		let usernameLabel = await page.$eval('label[for=username]', el => el.innerHTML);
-		let username = configUsername ? configUsername : readlineSync.question(`${usernameLabel}: `);
-		await usernameField.type(username);
-	}
 
-	let passwordField = await page.$('#password');
-	if(passwordField) {
-		let passwordLabel = await page.$eval('label[for=password]', el => el.innerHTML);
-		let password = configPassword ? configPassword : readlineSync.question(`${passwordLabel}: `, {
-			hideEchoBack: true,
-		});
-		await passwordField.type(password);
-	}
+	// Redirect Handler: Fill out the login form
+	async function handleRedirect(url) {
+		const browser = await puppeteer.launch();
+		const page = await browser.newPage();
+		await page.goto(url);
 
-	let resP = Promise.race([
-		page.waitForNavigation(),
-		new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
-	]);
-	await page.click('button[type=submit]');
-	let res = await resP;
+		let emailField = await page.$('#email');
+		if(emailField) {
+			let emailLabel = await page.$eval('label[for=email]', el => el.innerHTML);
+			let email = configEmail ? configEmail : readlineSync.question(`${emailLabel}: `);
+			await emailField.type(email);
+		}
 
-	if(res === null) {
-		await page.screenshot({ path: 'example.png' });
-		console.error('Authentication did not succeed!');
-		process.exit(1);
-	} else {
-		// node-solid-server may redirect to another form that needs a submit
-		if(res.status() !== 200) {
+		let usernameField = await page.$('#username');
+		if(usernameField) {
+			let usernameLabel = await page.$eval('label[for=username]', el => el.innerHTML);
+			let username = configUsername ? configUsername : readlineSync.question(`${usernameLabel}: `);
+			await usernameField.type(username);
+		}
+
+		let passwordField = await page.$('#password');
+		if(passwordField) {
+			let passwordLabel = await page.$eval('label[for=password]', el => el.innerHTML);
+			let password = configPassword ? configPassword : readlineSync.question(`${passwordLabel}: `, {
+				hideEchoBack: true,
+			});
+			await passwordField.type(password);
+		}
+
+		let resP = Promise.race([
+			page.waitForNavigation(),
+			new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
+		]);
+		await page.click('button[type=submit]');
+		let res = await resP;
+
+		if(res === null) {
+			await page.screenshot({ path: 'example.png' });
 			console.error('Authentication did not succeed!');
 			process.exit(1);
 		} else {
-			let submit = await page.$('button[type=submit]')
-			if(submit) {
-				await page.click('button[type=submit]');
+			// node-solid-server may redirect to another form that needs a submit
+			if(res.status() !== 200) {
+				await page.screenshot({ path: 'example.png' });
+				console.error('Authentication did not succeed!');
+				process.exit(2);
+			} else {
+				let submit = await page.$('button[type=submit]')
+				if(submit) {
+					await page.click('button[type=submit]');
+				}
 			}
 		}
+		await browser.close();
 	}
-	await browser.close();
 }
