@@ -1,10 +1,11 @@
-const express = require("express");
-const { Session } = require("@inrupt/solid-client-authn-node");
-const puppeteer = require('puppeteer');
-const process = require('process');
-const readlineSync = require('readline-sync');
-const { program } = require('commander');
-const { createReadStream } = require("fs");
+import express from 'express';
+import { Session } from '@inrupt/solid-client-authn-node';
+import puppeteer from 'puppeteer';
+import process from 'process';
+import readlineSync from 'readline-sync';
+import { program } from 'commander';
+import { createReadStream } from 'fs';
+import logger from 'loglevel';
 
 // Remove draft warning from oidc-client lib
 process.emitWarning = (warning, ...args) => {
@@ -34,30 +35,34 @@ program
 
 program.parseAsync();
 
-async function run(uri, options, command) {
+async function run(uri, options) {
 	const session = new Session();
+	let headers = {};
 	let fetchInit = {
 		method: options.method
 	};
-
-	// Transforming headers into format needed by fetch
-	let headers = {};
-	for(let h of options.header) {
-		let split = h.split(':')
-		headers[split[0]] = split.slice(1).join().trim();
-	}
-	fetchInit['headers'] = headers;
 
 	// Loading data from file if necessary
 	let data = options.data?.startsWith('@') ? createReadStream(options.data.substring(1)) : options.data;
 	if(data) {
 		fetchInit['body'] = data;
+		// Default method with data is POST
 		fetchInit['method'] = 'POST';
+		// Default Content-Type is text/turtle but can be overriden later
+		headers['content-type'] = 'text/turtle';
 	}
 
+	// Transforming headers into format needed by fetch
+	for(let h of options.header) {
+		let split = h.split(':')
+		headers[split[0].toLowerCase()] = split.slice(1).join().trim();
+	}
+	fetchInit['headers'] = headers;
+
 	const user = options.user;
+	// Do unauthenticated request when no user is provided
 	if(!user) {
-		// Do unauthenticated request when no user is provided
+		logger.info('* No user identity given, doing unauthenticated request');
 		const res = await session.fetch(uri, fetchInit);
 		const text = await res.text();
 		console.log(text);
@@ -68,7 +73,7 @@ async function run(uri, options, command) {
 	let server = null;
 
 	// Handler for the redirect from the IdP
-	app.get("/", async (req, res, next) => {
+	app.get("/", async (req, res) => {
 		await session.handleIncomingRedirect(`http://localhost:29884${req.url}`);
 		res.sendStatus(200);
 
@@ -144,13 +149,13 @@ async function run(uri, options, command) {
 
 		if(res === null) {
 			await page.screenshot({ path: 'example.png' });
-			console.error('Authentication did not succeed!');
+			logger.error('Authentication did not succeed!');
 			process.exit(1);
 		} else {
 			// node-solid-server may redirect to another form that needs a submit
 			if(res.status() !== 200) {
 				await page.screenshot({ path: 'example.png' });
-				console.error('Authentication did not succeed!');
+				logger.error('Authentication did not succeed!');
 				process.exit(2);
 			} else {
 				let submit = await page.$('button[type=submit]')
