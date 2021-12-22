@@ -5,7 +5,7 @@ import process from 'process';
 import { program } from 'commander';
 import { createReadStream } from 'fs';
 import logger from 'loglevel';
-import e from 'express';
+import { Writable } from 'stream';
 
 // Remove draft warning from oidc-client lib
 process.emitWarning = (warning: any, ...args: any) => {
@@ -20,16 +20,16 @@ program
 	.version('0.1.0', '-V, --version', 'Show version number and quit')
 	.argument('<uri>', 'Target URI')
 	.option('-d, --data <data>', 'HTTP POST data')
-	.option('-f, --fail', 'Fail silently (no output at all) on HTTP errors')
+	//.option('-f, --fail', 'Fail silently (no output at all) on HTTP errors')
 	.option('-H, --header <header...>', 'Add header to request')
 	.option('-i, --include', 'Include HTTP response headers in output')
 	.option('-L, --location', 'Follow redirects')
-	.option('-o, --output <file>', 'Write to file instead of stdout')
-	.option('-O, --remote-name', 'Write output to a file named as the remote file')
+	//.option('-o, --output <file>', 'Write to file instead of stdout')
+	//.option('-O, --remote-name', 'Write output to a file named as the remote file')
 	.option('-s, --silent', 'Silent mode')
-	.option('-T, --transfer-file <file>', 'Transfer local FILE to destination')
+	//.option('-T, --transfer-file <file>', 'Transfer local FILE to destination')
 	.option('-u, --user <identity>', 'Use identity from config file')
-	.option('-A, --user-agent <name>', 'Send User-Agent <name> to server')
+	//.option('-A, --user-agent <name>', 'Send User-Agent <name> to server')
 	.option('-v, --verbose', 'Make the operation more talkative')
 	.option('-X, --request <method>', 'Specify custom request method', 'GET')
 	.action(run);
@@ -39,6 +39,9 @@ program.parseAsync();
 async function run(uri: string, options: any) {
 	if(options.verbose) {
 		logger.setLevel('info');
+	}
+	if(options.silent) {
+		logger.setLevel('silent');
 	}
 
 	const session = new Session();
@@ -75,7 +78,7 @@ async function run(uri: string, options: any) {
 	// Do unauthenticated request when no user is provided
 	if(!user) {
 		logger.info('* No user identity given, doing unauthenticated request');
-		await doFetch(uri, fetchInit, headers, session);
+		await doFetch(uri, fetchInit, headers, session, process.stdout, options?.include);
 		process.exit();
 	}
 
@@ -89,7 +92,7 @@ async function run(uri: string, options: any) {
 		expressRes.sendStatus(200);
 
 		logger.info(`* Doing actual request authenticated as ${session.info.webId}`);
-		await doFetch(uri, fetchInit, headers, session);
+		await doFetch(uri, fetchInit, headers, session, process.stdout, options?.include);
 		process.exit();
 	});
 	server = app.listen(29884);
@@ -180,7 +183,7 @@ async function run(uri: string, options: any) {
 	}
 }
 
-async function doFetch(uri: string, fetchInit: RequestInit, headers: Record<string,string>, session: Session) {
+async function doFetch(uri: string, fetchInit: RequestInit, headers: Record<string,string>, session: Session, outStream: Writable, include: boolean) {
 		// Do actual request
 		logger.info(`> ${fetchInit.method} /${uri.split('/').slice(3).join('/')} HTTP/1.1`);
 		for(let h in headers) {
@@ -195,12 +198,21 @@ async function doFetch(uri: string, fetchInit: RequestInit, headers: Record<stri
 		try {
 			let res = await session.fetch(uri, fetchInit);
 			logger.info(`< HTTP/1.1 ${res.status} ${res.statusText}`);
+			if(include) {
+				outStream.write(`HTTP/1.1 ${res.status} ${res.statusText}\n`);
+			}
 			for(let h of res.headers) {
 				logger.info(`< ${h[0].split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}: ${h[1]}`);
+				if(include) {
+					outStream.write(`${'\033[1m'}${h[0].split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}${'\033[0m'}: ${h[1]}\n`);
+				}
+			}
+			if(include) {
+				outStream.write(`\n`);
 			}
 			logger.info('<');
 			let text = await res.text();
-			console.log(text);
+			outStream.write(text);
 		}
 		catch(error: any) {
 			if(error['errno'] === 'ENOTFOUND') {
