@@ -53,7 +53,6 @@ async function run(uri: string, options: any) {
 		'host': uri.split('/').slice(2,3).join()
 	};
 	let fetchInit: RequestInit = {
-		method: options.request,
 		redirect: options.location ? 'follow' : 'manual'
 	};
 
@@ -65,6 +64,11 @@ async function run(uri: string, options: any) {
 		fetchInit['method'] = 'POST';
 		// Default Content-Type is text/turtle but can be overriden later
 		headers['content-type'] = 'text/turtle';
+	}
+
+	// Setting method
+	if(options.request) {
+		fetchInit['method'] = options.request;
 	}
 
 	// Transforming headers into format needed by fetch
