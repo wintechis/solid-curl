@@ -1,18 +1,17 @@
 import express from 'express';
 import { Session } from '@inrupt/solid-client-authn-node';
-import puppeteer from 'puppeteer';
+import puppeteer, { HTTPResponse } from 'puppeteer';
 import process from 'process';
-import readlineSync from 'readline-sync';
 import { program } from 'commander';
 import { createReadStream } from 'fs';
 import logger from 'loglevel';
 
 // Remove draft warning from oidc-client lib
-process.emitWarning = (warning, ...args) => {
+process.emitWarning = (warning: any, ...args: any) => {
 	if (args[0] === 'DraftWarning') {
 		return;
 	}
-	return emitWarning(warning, ...args);
+	return process.emitWarning(warning, ...args);
 };
 
 // Command line arguments
@@ -21,7 +20,7 @@ program
 	.argument('<uri>', 'Target URI')
 	.option('-d, --data <data>', 'HTTP POST data')
 	.option('-f, --fail', 'Fail silently (no output at all) on HTTP errors')
-	.option('-H, --header <header...>', 'Add header to request', [])
+	.option('-H, --header <header...>', 'Add header to request')
 	.option('-i, --include', 'Include HTTP response headers in output')
 	.option('-o, --output <file>', 'Write to file instead of stdout')
 	.option('-O, --remote-name', 'Write output to a file named as the remote file')
@@ -35,10 +34,10 @@ program
 
 program.parseAsync();
 
-async function run(uri, options) {
+async function run(uri: string, options: any) {
 	const session = new Session();
-	let headers = {};
-	let fetchInit = {
+	let headers: Record<string,string> = {};
+	let fetchInit: RequestInit = {
 		method: options.method
 	};
 
@@ -53,7 +52,7 @@ async function run(uri, options) {
 	}
 
 	// Transforming headers into format needed by fetch
-	for(let h of options.header) {
+	for(let h of options?.header || []) {
 		let split = h.split(':')
 		headers[split[0].toLowerCase()] = split.slice(1).join().trim();
 	}
@@ -96,7 +95,7 @@ async function run(uri, options) {
 	} = config[options.user];
 
 	// Log in
-	let oidcIssuer = configOidcProvider ? configOidcProvider : readlineSync.question(`Solid OIDC Provider URI: `);
+	let oidcIssuer = configOidcProvider// ? configOidcProvider : readlineSync.question(`Solid OIDC Provider URI: `);
 	session.login({
 		redirectUrl: 'http://localhost:29884/',
 		oidcIssuer: oidcIssuer,
@@ -112,7 +111,7 @@ async function run(uri, options) {
 
 
 	// Redirect Handler: Fill out the login form
-	async function handleRedirect(url) {
+	async function handleRedirect(url: string) {
 		const browser = await puppeteer.launch();
 		const page = await browser.newPage();
 		await page.goto(url);
@@ -120,23 +119,23 @@ async function run(uri, options) {
 		let emailField = await page.$('#email');
 		if(emailField) {
 			let emailLabel = await page.$eval('label[for=email]', el => el.innerHTML);
-			let email = configEmail ? configEmail : readlineSync.question(`${emailLabel}: `);
+			let email = configEmail// ? configEmail : readlineSync.question(`${emailLabel}: `);
 			await emailField.type(email);
 		}
 
 		let usernameField = await page.$('#username');
 		if(usernameField) {
 			let usernameLabel = await page.$eval('label[for=username]', el => el.innerHTML);
-			let username = configUsername ? configUsername : readlineSync.question(`${usernameLabel}: `);
+			let username = configUsername// ? configUsername : readlineSync.question(`${usernameLabel}: `);
 			await usernameField.type(username);
 		}
 
 		let passwordField = await page.$('#password');
 		if(passwordField) {
 			let passwordLabel = await page.$eval('label[for=password]', el => el.innerHTML);
-			let password = configPassword ? configPassword : readlineSync.question(`${passwordLabel}: `, {
-				hideEchoBack: true,
-			});
+			let password = configPassword// ? configPassword : readlineSync.question(`${passwordLabel}: `, {
+			//	hideEchoBack: true,
+			//});
 			await passwordField.type(password);
 		}
 
@@ -153,7 +152,7 @@ async function run(uri, options) {
 			process.exit(1);
 		} else {
 			// node-solid-server may redirect to another form that needs a submit
-			if(res.status() !== 200) {
+			if((res as HTTPResponse).status() !== 200) {
 				await page.screenshot({ path: 'example.png' });
 				logger.error('Authentication did not succeed!');
 				process.exit(2);
