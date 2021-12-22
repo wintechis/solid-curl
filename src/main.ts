@@ -5,6 +5,7 @@ import process from 'process';
 import { program } from 'commander';
 import { createReadStream } from 'fs';
 import logger from 'loglevel';
+import e from 'express';
 
 // Remove draft warning from oidc-client lib
 process.emitWarning = (warning: any, ...args: any) => {
@@ -74,20 +75,7 @@ async function run(uri: string, options: any) {
 	// Do unauthenticated request when no user is provided
 	if(!user) {
 		logger.info('* No user identity given, doing unauthenticated request');
-		logger.info(`> ${fetchInit.method} /${uri.split('/').slice(3).join('/')} HTTP/1.1`);
-		for(let h in headers) {
-			// Make header names upercase for logging
-			logger.info(`> ${h.split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}: ${headers[h]}`);
-		}
-		logger.info('>');
-		let res = await session.fetch(uri, fetchInit);
-		logger.info(`< HTTP/1.1 ${res.status} ${res.statusText}`);
-		for(let h of res.headers) {
-			logger.info(`< ${h[0].split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}: ${h[1]}`);
-		}
-		logger.info('<');
-		let text = await res.text();
-		console.log(text);
+		await doFetch(uri, fetchInit, headers, session);
 		process.exit();
 	}
 
@@ -101,21 +89,7 @@ async function run(uri: string, options: any) {
 		expressRes.sendStatus(200);
 
 		logger.info(`* Doing actual request authenticated as ${session.info.webId}`);
-		// Do actual request
-		logger.info(`> ${fetchInit.method} /${uri.split('/').slice(3).join('/')} HTTP/1.1`);
-		for(let h in headers) {
-			// Make header names upercase for logging
-			logger.info(`> ${h.split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}: ${headers[h]}`);
-		}
-		logger.info('>');
-		let res = await session.fetch(uri, fetchInit);
-		logger.info(`< HTTP/1.1 ${res.status} ${res.statusText}`);
-		for(let h of res.headers) {
-			logger.info(`< ${h[0].split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}: ${h[1]}`);
-		}
-		logger.info('<');
-		let text = await res.text();
-		console.log(text);
+		await doFetch(uri, fetchInit, headers, session);
 		process.exit();
 	});
 	server = app.listen(29884);
@@ -204,4 +178,35 @@ async function run(uri: string, options: any) {
 		}
 		await browser.close();
 	}
+}
+
+async function doFetch(uri: string, fetchInit: RequestInit, headers: Record<string,string>, session: Session) {
+		// Do actual request
+		logger.info(`> ${fetchInit.method} /${uri.split('/').slice(3).join('/')} HTTP/1.1`);
+		for(let h in headers) {
+			// Make header names upercase for logging
+			logger.info(`> ${h.split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}: ${headers[h]}`);
+		}
+		// If request was authenticated, add placeholder for DPoP
+		if(session.info.isLoggedIn) {
+			logger.info(`> Authorization: DPoP [omitted]`);
+		}
+		logger.info('>');
+		try {
+			let res = await session.fetch(uri, fetchInit);
+			logger.info(`< HTTP/1.1 ${res.status} ${res.statusText}`);
+			for(let h of res.headers) {
+				logger.info(`< ${h[0].split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}: ${h[1]}`);
+			}
+			logger.info('<');
+			let text = await res.text();
+			console.log(text);
+		}
+		catch(error: any) {
+			if(error['errno'] === 'ENOTFOUND') {
+				logger.error(`Could not resolve host: ${uri.split('/').slice(2,3).join()}`)
+			} else if(error['errno'] === 'ECONNREFUSED') {
+				logger.error(`Connection refused: ${uri.split('/').slice(2,3).join()}`)
+			}
+		}
 }
