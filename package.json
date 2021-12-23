@@ -14,9 +14,7 @@
     "@inrupt/solid-client-authn-node": "^1.11.2",
     "commander": "^8.3.0",
     "express": "^4.17.1",
-    "install": "^0.13.0",
     "loglevel": "^1.8.0",
-    "npm": "^8.2.0",
     "puppeteer": "^13.0.0",
     "puppeteer-core": "^13.0.0"
   },
