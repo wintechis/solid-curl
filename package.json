@@ -1,15 +1,15 @@
 {
   "name": "solid-curl",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "0.1.0",
+  "description": "Command line application mimicking the behaviour of cURL but authenticating using Solid-OIDC",
+  "main": "./src/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start:dev": "ts-node-dev ./src/main.ts",
     "start": "tsc && node ./dist/main.js"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "Daniel Schraudner <daniel.schraudner@fau.de>",
+  "license": "MIT",
   "dependencies": {
     "@inrupt/solid-client-authn-node": "^1.11.2",
     "commander": "^8.3.0",
