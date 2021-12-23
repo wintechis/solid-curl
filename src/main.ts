@@ -4,7 +4,7 @@ import puppeteer, { HTTPResponse } from 'puppeteer';
 import process from 'process';
 import { program } from 'commander';
 import { createReadStream } from 'fs';
-import logger from 'loglevel';
+import logger, { debug } from 'loglevel';
 import { Writable } from 'stream';
 
 // Remove draft warning from oidc-client lib
@@ -136,23 +136,20 @@ async function run(uri: string, options: any) {
 
 		let emailField = await page.$('#email');
 		if(emailField) {
-			let emailLabel = await page.$eval('label[for=email]', el => el.innerHTML);
 			let email = configEmail// ? configEmail : readlineSync.question(`${emailLabel}: `);
 			logger.info(`* Entering email to form: ${email}`);
 			await emailField.type(email);
 		}
 
-		let usernameField = await page.$('#username');
+		let usernameField = await page.$('#username') || await page.$('#signInFormUsername');
 		if(usernameField) {
-			let usernameLabel = await page.$eval('label[for=username]', el => el.innerHTML);
 			let username = configUsername// ? configUsername : readlineSync.question(`${usernameLabel}: `);
 			logger.info(`* Entering username to form: ${username}`);
 			await usernameField.type(username);
 		}
 
-		let passwordField = await page.$('#password');
+		let passwordField = await page.$('#password') || await page.$('#signInFormPassword');
 		if(passwordField) {
-			let passwordLabel = await page.$eval('label[for=password]', el => el.innerHTML);
 			let password = configPassword// ? configPassword : readlineSync.question(`${passwordLabel}: `, {
 			//	hideEchoBack: true,
 			//});
@@ -164,8 +161,9 @@ async function run(uri: string, options: any) {
 			page.waitForNavigation(),
 			new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
 		]);
+		let submit = await page.$('button[type=submit]') || await page.$('input[type=Submit]'); 
 		logger.info(`* Submitting login form`);
-		await page.click('button[type=submit]');
+		await submit?.click();
 		let res = await resP;
 
 		if(res === null) {
@@ -177,9 +175,11 @@ async function run(uri: string, options: any) {
 				logger.error(`Authentication did not succeed: ${(res as HTTPResponse).status()} ${(res as HTTPResponse).statusText()}`);
 				process.exit(2);
 			} else {
-				let submit = await page.$('button[type=submit]')
+				let submit = await page.$('button[type=submit]') || await page.$('button[form=approve]');
 				if(submit) {
-					await page.click('button[type=submit]');
+					logger.info(`* Pressing button to allow our application`);
+					submit.click();
+					await page.waitForNavigation();
 				}
 			}
 		}
