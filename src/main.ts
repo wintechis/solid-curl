@@ -215,8 +215,8 @@ async function doFetch(uri: string, fetchInit: RequestInit, headers: Record<stri
 				outStream.write(`\n`);
 			}
 			logger.info('<');
-			let text = await res.text();
-			outStream.write(text);
+			let buffer = Buffer.from(await res.arrayBuffer())
+			outStream.write(buffer);
 		}
 		catch(error: any) {
 			if(error['errno'] === 'ENOTFOUND') {
