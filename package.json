@@ -3,7 +3,7 @@
   "version": "0.1.0-0",
   "description": "Command line application mimicking the behaviour of cURL but authenticating using Solid-OIDC",
   "engines": {
-    "node": "16.13.1"
+    "node": ">=12.22.5"
   },
   "main": "./dist/main.js",
   "scripts": {
@@ -11,6 +11,9 @@
     "build": "tsc",
     "start:dev": "ts-node-dev ./src/main.ts",
     "start": "tsc && node ./dist/main.js"
+  },
+  "bin": {
+    "solid-curl": "dist/solid-curl"
   },
   "repository": {
     "type": "git",

@@ -102,7 +102,7 @@ async function run(uri: string, options: any) {
 	server = app.listen(29884);
 
 	// Try to load credentials from config
-	const config = require('../.solid-curl-ids.json');
+	const config = require('~/.solid-curl-ids.json');
 	const {
 		oidcProvider: configOidcProvider,
 		email: configEmail,
