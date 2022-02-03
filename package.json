@@ -1,15 +1,28 @@
 {
   "name": "solid-curl",
-  "version": "0.1.0",
+  "version": "0.1.0-0",
   "description": "Command line application mimicking the behaviour of cURL but authenticating using Solid-OIDC",
-  "main": "./src/main.js",
+  "engines": {
+    "node": "16.13.1"
+  },
+  "main": "./dist/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
     "start:dev": "ts-node-dev ./src/main.ts",
     "start": "tsc && node ./dist/main.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wintechis/solid-curl.git"
+  },
+  "keywords": ["Solid", "cURL", "Linked Data", "Semantic Web"],
   "author": "Daniel Schraudner <daniel.schraudner@fau.de>",
   "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/wintechis/solid-curl/issues"
+  },
+  "homepage": "https://github.com/wintechis/solid-curl",
   "dependencies": {
     "@inrupt/solid-client-authn-node": "^1.11.2",
     "commander": "^8.3.0",
