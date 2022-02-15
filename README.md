@@ -31,7 +31,7 @@ To use Solid-OIDC you have to specify an identity using the `-u` option. For eve
 {
         "dschraudner": {
                 "oidcProvider": "https://solid.dschraudner.de/",
-                "email": "daniel@dschraudner.de",
+                "email": "daniel@example.de",
                 "password": "myverysecretpassword"
         },
         "community": {
