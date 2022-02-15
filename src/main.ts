@@ -7,6 +7,9 @@ import { createReadStream } from 'fs';
 import logger, { debug } from 'loglevel';
 import { Writable } from 'stream';
 
+// Get version from package.json
+const { version } = require('./package.json');
+
 // Remove draft warning from oidc-client lib
 process.emitWarning = (warning: any, ...args: any) => {
 	if (args[0] === 'DraftWarning') {
@@ -17,7 +20,7 @@ process.emitWarning = (warning: any, ...args: any) => {
 
 // Command line arguments
 program
-	.version('0.1.0', '-V, --version', 'Show version number and quit')
+	.version(version, '-V, --version', 'Show version number and quit')
 	.argument('<uri>', 'Target URI')
 	.option('-d, --data <data>', 'HTTP POST data')
 	//.option('-f, --fail', 'Fail silently (no output at all) on HTTP errors')
