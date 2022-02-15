@@ -2,7 +2,9 @@
 Command line application mimicking the behaviour of cURL but authenticating using Solid-OIDC
 
 ## Installation
-TODO
+```
+npm install -g solid-curl
+```
 
 ## Usage
 ```
