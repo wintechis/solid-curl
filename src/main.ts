@@ -11,12 +11,15 @@ import fs from 'fs';
 
 // Remove draft warning from oidc-client lib
 process.emitWarning = (warning: any, ...args: any) => {
-	return;
+	if (args[0] === 'DraftWarning') {
+		return;
+	}
+	return process.emitWarning(warning, ...args);
 };
 
 // Command line arguments
 program
-	.version('0.1.6', '-V, --version', 'Show version number and quit')
+	.version('0.1.7', '-V, --version', 'Show version number and quit')
 	.argument('<uri>', 'Target URI')
 	.option('-d, --data <data>', 'HTTP POST data')
 	//.option('-f, --fail', 'Fail silently (no output at all) on HTTP errors')

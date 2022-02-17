@@ -1,9 +1,9 @@
 {
   "name": "solid-curl",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Command line application mimicking the behaviour of cURL but authenticating using Solid-OIDC",
   "engines": {
-    "node": ">=12.22.5"
+    "node": ">=16.13.1"
   },
   "main": "./dist/main.js",
   "scripts": {
