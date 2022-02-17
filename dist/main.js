@@ -20,14 +20,11 @@ const fs_1 = require("fs");
 const loglevel_1 = __importDefault(require("loglevel"));
 // Remove draft warning from oidc-client lib
 process_1.default.emitWarning = (warning, ...args) => {
-    if (args[0] === 'DraftWarning') {
-        return;
-    }
-    return process_1.default.emitWarning(warning, ...args);
+    return;
 };
 // Command line arguments
 commander_1.program
-    .version('0.1.4', '-V, --version', 'Show version number and quit')
+    .version('0.1.5', '-V, --version', 'Show version number and quit')
     .argument('<uri>', 'Target URI')
     .option('-d, --data <data>', 'HTTP POST data')
     //.option('-f, --fail', 'Fail silently (no output at all) on HTTP errors')
