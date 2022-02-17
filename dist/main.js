@@ -18,8 +18,6 @@ const process_1 = __importDefault(require("process"));
 const commander_1 = require("commander");
 const fs_1 = require("fs");
 const loglevel_1 = __importDefault(require("loglevel"));
-// Get version from package.json
-const { version } = require('./package.json');
 // Remove draft warning from oidc-client lib
 process_1.default.emitWarning = (warning, ...args) => {
     if (args[0] === 'DraftWarning') {
@@ -29,7 +27,7 @@ process_1.default.emitWarning = (warning, ...args) => {
 };
 // Command line arguments
 commander_1.program
-    .version(version, '-V, --version', 'Show version number and quit')
+    .version('0.1.4', '-V, --version', 'Show version number and quit')
     .argument('<uri>', 'Target URI')
     .option('-d, --data <data>', 'HTTP POST data')
     //.option('-f, --fail', 'Fail silently (no output at all) on HTTP errors')
