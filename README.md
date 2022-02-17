@@ -1,3 +1,8 @@
+[![npm-version](https://img.shields.io/npm/v/solid-curl)](https://img.shields.io/npm/v/solid-curl)
+[![node-version](https://img.shields.io/node/v/solid-curl)](https://img.shields.io/node/v/solid-curl)
+[![license](https://img.shields.io/github/license/wintechis/solid-curl)](https://github.com/wintechis/solid-curl/blob/main/LICENSE)
+[![publish-npm](https://github.com/wintechis/solid-curl/actions/workflows/npm-publish.yml/badge.svg?branch=main)](https://github.com/wintechis/solid-curl/actions/workflows/npm-publish.yml)
+
 # solid-curl
 Command line application mimicking the behaviour of cURL but authenticating using Solid-OIDC
 
