@@ -6,6 +6,8 @@ import { program } from 'commander';
 import { createReadStream } from 'fs';
 import logger, { debug } from 'loglevel';
 import { Writable } from 'stream';
+import os from 'os';
+import fs from 'fs';
 
 // Remove draft warning from oidc-client lib
 process.emitWarning = (warning: any, ...args: any) => {
@@ -99,7 +101,7 @@ async function run(uri: string, options: any) {
 	server = app.listen(29884);
 
 	// Try to load credentials from config
-	const config = require('~/.solid-curl-ids.json');
+	const config = JSON.parse(fs.readFileSync(`${os.homedir()}/.solid-curl-ids.json`).toString());
 	const {
 		oidcProvider: configOidcProvider,
 		email: configEmail,
