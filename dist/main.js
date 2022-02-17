@@ -18,13 +18,15 @@ const process_1 = __importDefault(require("process"));
 const commander_1 = require("commander");
 const fs_1 = require("fs");
 const loglevel_1 = __importDefault(require("loglevel"));
+const os_1 = __importDefault(require("os"));
+const fs_2 = __importDefault(require("fs"));
 // Remove draft warning from oidc-client lib
 process_1.default.emitWarning = (warning, ...args) => {
     return;
 };
 // Command line arguments
 commander_1.program
-    .version('0.1.5', '-V, --version', 'Show version number and quit')
+    .version('0.1.6', '-V, --version', 'Show version number and quit')
     .argument('<uri>', 'Target URI')
     .option('-d, --data <data>', 'HTTP POST data')
     //.option('-f, --fail', 'Fail silently (no output at all) on HTTP errors')
@@ -100,7 +102,7 @@ function run(uri, options) {
         }));
         server = app.listen(29884);
         // Try to load credentials from config
-        const config = require('~/.solid-curl-ids.json');
+        const config = JSON.parse(fs_2.default.readFileSync(`${os_1.default.homedir()}/.solid-curl-ids.json`).toString());
         const { oidcProvider: configOidcProvider, email: configEmail, username: configUsername, password: configPassword, } = config[options.user];
         loglevel_1.default.info(`* Loaded credentials of identity ${options.user} from config file`);
         // Log in

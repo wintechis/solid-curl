@@ -16,7 +16,7 @@ process.emitWarning = (warning: any, ...args: any) => {
 
 // Command line arguments
 program
-	.version('0.1.5', '-V, --version', 'Show version number and quit')
+	.version('0.1.6', '-V, --version', 'Show version number and quit')
 	.argument('<uri>', 'Target URI')
 	.option('-d, --data <data>', 'HTTP POST data')
 	//.option('-f, --fail', 'Fail silently (no output at all) on HTTP errors')
