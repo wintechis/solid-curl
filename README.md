@@ -48,3 +48,5 @@ To use Solid-OIDC you have to specify an identity using the `-u` option. For eve
         }
 }
 ```
+
+**Note:** Make sure that your identity file is not readable for others e. g. by using `chmod 600 .solid-curl-ids.json`!
