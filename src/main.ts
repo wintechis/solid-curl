@@ -4,13 +4,13 @@ import puppeteer, { HTTPResponse } from 'puppeteer';
 import process from 'process';
 import { program } from 'commander';
 import { createReadStream } from 'fs';
-import logger, { debug } from 'loglevel';
+import logger from 'loglevel';
 import { Writable } from 'stream';
 import os from 'os';
 import fs from 'fs';
 
 // Remove draft warning from oidc-client lib
-process.emitWarning = (warning: any, ...args: any) => {
+process.emitWarning = () => {
 	return;
 };
 
@@ -207,7 +207,7 @@ async function doFetch(uri: string, fetchInit: RequestInit, headers: Record<stri
 			for(let h of res.headers) {
 				logger.info(`< ${h[0].split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}: ${h[1]}`);
 				if(include) {
-					outStream.write(`${'\033[1m'}${h[0].split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}${'\033[0m'}: ${h[1]}\n`);
+					outStream.write(`${'\x1b[1m'}${h[0].split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}${'\x1b[0m'}: ${h[1]}\n`);
 				}
 			}
 			if(include) {
