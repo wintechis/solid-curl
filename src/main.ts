@@ -9,6 +9,7 @@ import { deletePassword, findCredentials, getPassword, setPassword } from 'keyta
 import { question } from 'readline-sync';;
 import { Parser, Quad, Store, DataFactory } from 'n3';
 import { printTable } from 'console-table-printer';
+import { lookup } from 'mime-types';
 import os from 'os';
 import fs from 'fs';
 
@@ -38,7 +39,7 @@ program
 	.option('-u, -- <identity>', 'Use stored identity')
 	//.option('-A, --user-agent <name>', 'Send User-Agent <name> to server')
 	.option('-v, --verbose', 'Make the operation more talkative')
-	.option('-X, --request <method>', 'Specify custom request method', 'GET')
+	.option('-X, --request <method>', 'Specify custom request method')
 	.action(run);
 	
 program
@@ -81,10 +82,11 @@ async function run(uri: string, options: any) {
 	let data = options.data?.startsWith('@') ? createReadStream(options.data.substring(1)) : options.data;
 	if(data) {
 		fetchInit['body'] = data;
+		(fetchInit as RequestInit & { duplex: string })['duplex'] = 'half';
 		// Default method with data is POST
 		fetchInit['method'] = 'POST';
-		// Default Content-Type is text/turtle but can be overriden later
-		headers['content-type'] = 'text/turtle';
+		// Determine MIME type (can be overwritten by the user), default text/turtle
+		headers['content-type'] = lookup(options.data.substring(1)) || 'text/turtle';
 	}
 
 	// Setting method
@@ -301,6 +303,8 @@ async function doFetch(uri: string, fetchInit: RequestInit, headers: Record<stri
 				logger.error(`Could not resolve host: ${uri.split('/').slice(2,3).join()}`)
 			} else if(error['errno'] === 'ECONNREFUSED') {
 				logger.error(`Connection refused: ${uri.split('/').slice(2,3).join()}`)
+			} else {
+				logger.error(error);
 			}
 		}
 }

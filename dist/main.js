@@ -22,6 +22,7 @@ const readline_sync_1 = require("readline-sync");
 ;
 const n3_1 = require("n3");
 const console_table_printer_1 = require("console-table-printer");
+const mime_types_1 = require("mime-types");
 const { namedNode } = n3_1.DataFactory;
 const version = '0.1.6';
 // Remove draft warning from oidc-client lib
@@ -43,10 +44,9 @@ commander_1.program
     //.option('-T, --transfer-file <file>', 'Transfer local FILE to destination')
     .option('-u, --user <identity>', 'Use stored identity')
     .option('-u, -- <identity>', 'Use stored identity')
-    //.option('--list-users', 'List identities for which credentials are available')
     //.option('-A, --user-agent <name>', 'Send User-Agent <name> to server')
     .option('-v, --verbose', 'Make the operation more talkative')
-    .option('-X, --request <method>', 'Specify custom request method', 'GET')
+    .option('-X, --request <method>', 'Specify custom request method')
     .action(run);
 commander_1.program
     .command('register-user')
@@ -84,10 +84,11 @@ function run(uri, options) {
         let data = ((_a = options.data) === null || _a === void 0 ? void 0 : _a.startsWith('@')) ? (0, fs_1.createReadStream)(options.data.substring(1)) : options.data;
         if (data) {
             fetchInit['body'] = data;
+            fetchInit['duplex'] = 'half';
             // Default method with data is POST
             fetchInit['method'] = 'POST';
-            // Default Content-Type is text/turtle but can be overriden later
-            headers['content-type'] = 'text/turtle';
+            // Determine MIME type (can be overwritten by the user), default text/turtle
+            headers['content-type'] = (0, mime_types_1.lookup)(options.data.substring(1)) || 'text/turtle';
         }
         // Setting method
         if (options.request) {
@@ -297,6 +298,9 @@ function doFetch(uri, fetchInit, headers, session, outStream, include) {
             }
             else if (error['errno'] === 'ECONNREFUSED') {
                 loglevel_1.default.error(`Connection refused: ${uri.split('/').slice(2, 3).join()}`);
+            }
+            else {
+                loglevel_1.default.error(error);
             }
         }
     });
