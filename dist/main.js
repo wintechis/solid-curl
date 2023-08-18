@@ -1,3 +1,4 @@
+"use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -11,22 +12,25 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = __importDefault(require("express"));
 const solid_client_authn_node_1 = require("@inrupt/solid-client-authn-node");
-const puppeteer_1 = __importDefault(require("puppeteer"));
 const process_1 = __importDefault(require("process"));
 const commander_1 = require("commander");
 const fs_1 = require("fs");
 const loglevel_1 = __importDefault(require("loglevel"));
-const os_1 = __importDefault(require("os"));
-const fs_2 = __importDefault(require("fs"));
+const keytar_1 = require("keytar");
+const readline_sync_1 = require("readline-sync");
+;
+const n3_1 = require("n3");
+const console_table_printer_1 = require("console-table-printer");
+const { namedNode } = n3_1.DataFactory;
+const version = '0.1.6';
 // Remove draft warning from oidc-client lib
-process_1.default.emitWarning = (warning, ...args) => {
+process_1.default.emitWarning = () => {
     return;
 };
 // Command line arguments
 commander_1.program
-    .version('0.1.6', '-V, --version', 'Show version number and quit')
+    .version(version, '-V, --version', 'Show version number and quit')
     .argument('<uri>', 'Target URI')
     .option('-d, --data <data>', 'HTTP POST data')
     //.option('-f, --fail', 'Fail silently (no output at all) on HTTP errors')
@@ -37,11 +41,24 @@ commander_1.program
     //.option('-O, --remote-name', 'Write output to a file named as the remote file')
     .option('-s, --silent', 'Silent mode')
     //.option('-T, --transfer-file <file>', 'Transfer local FILE to destination')
-    .option('-u, --user <identity>', 'Use identity from config file')
+    .option('-u, --user <identity>', 'Use stored identity')
+    .option('-u, -- <identity>', 'Use stored identity')
+    //.option('--list-users', 'List identities for which credentials are available')
     //.option('-A, --user-agent <name>', 'Send User-Agent <name> to server')
     .option('-v, --verbose', 'Make the operation more talkative')
     .option('-X, --request <method>', 'Specify custom request method', 'GET')
     .action(run);
+commander_1.program
+    .command('register-user')
+    .argument('<uri>', 'WebID')
+    .action(registerUser);
+commander_1.program
+    .command('delete-user')
+    .argument('<identity>', 'Identity name')
+    .action(deleteUser);
+commander_1.program
+    .command('list-users')
+    .action(listUsers);
 commander_1.program.parseAsync();
 function run(uri, options) {
     var _a;
@@ -55,7 +72,7 @@ function run(uri, options) {
         const session = new solid_client_authn_node_1.Session();
         let headers = {
             'accept': 'text/turtle, */*;q=0.8',
-            'user-agent': 'solid-curl/0.1.0',
+            'user-agent': 'solid-curl/' + version,
             'accept-encoding': 'gzip,deflate',
             'connection': 'close',
             'host': uri.split('/').slice(2, 3).join()
@@ -89,94 +106,157 @@ function run(uri, options) {
             yield doFetch(uri, fetchInit, headers, session, process_1.default.stdout, options === null || options === void 0 ? void 0 : options.include);
             process_1.default.exit();
         }
-        const app = (0, express_1.default)();
-        let server = null;
-        // Handler for the redirect from the IdP
-        app.get("/", (req, expressRes) => __awaiter(this, void 0, void 0, function* () {
-            loglevel_1.default.info(`* Received redirect from IdP to: ${req.url}`);
-            yield session.handleIncomingRedirect(`http://localhost:29884${req.url}`);
-            expressRes.sendStatus(200);
-            loglevel_1.default.info(`* Doing actual request authenticated as ${session.info.webId}`);
-            yield doFetch(uri, fetchInit, headers, session, process_1.default.stdout, options === null || options === void 0 ? void 0 : options.include);
-            process_1.default.exit();
-        }));
-        server = app.listen(29884);
-        // Try to load credentials from config
-        const config = JSON.parse(fs_2.default.readFileSync(`${os_1.default.homedir()}/.solid-curl-ids.json`).toString());
-        const { oidcProvider: configOidcProvider, email: configEmail, username: configUsername, password: configPassword, } = config[options.user];
-        loglevel_1.default.info(`* Loaded credentials of identity ${options.user} from config file`);
+        // Get credentials from storage
+        let credentials = yield (0, keytar_1.findCredentials)('solid-curl');
+        if (!credentials.some(c => c.account === user)) {
+            loglevel_1.default.error('No credentials with name \'' + user + '\' found!');
+            process_1.default.exit(1);
+        }
+        let creds = JSON.parse(credentials.find(c => c.account === user).password);
         // Log in
-        let oidcIssuer = configOidcProvider; // ? configOidcProvider : readlineSync.question(`Solid OIDC Provider URI: `);
+        let oidcIssuer = creds['oidcIssuer'];
         loglevel_1.default.info(`* Initiating OIDC login at ${oidcIssuer}`);
         yield session.login({
-            redirectUrl: 'http://localhost:29884/',
             oidcIssuer: oidcIssuer,
-            handleRedirect: handleRedirect,
+            clientId: creds['id'],
+            clientSecret: creds['secret']
         });
-        /*
-    } catch (e) {
-        if (e.code !== 'MODULE_NOT_FOUND') {
-            throw e;
+        yield doFetch(uri, fetchInit, headers, session, process_1.default.stdout, options === null || options === void 0 ? void 0 : options.include);
+        process_1.default.exit();
+    });
+}
+function listUsers() {
+    return __awaiter(this, void 0, void 0, function* () {
+        let credentials = yield (0, keytar_1.findCredentials)('solid-curl');
+        let prettyCredentials = credentials.map(c => {
+            let creds = JSON.parse(c.password);
+            return {
+                Identity: c.account,
+                WebID: creds['webId'],
+                'OIDC Issuer': creds['oidcIssuer'],
+                ClientID: creds['id']
+            };
+        });
+        (0, console_table_printer_1.printTable)(prettyCredentials);
+    });
+}
+function registerUser(webId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let oidcIssuer = yield getOIDCIssuer(webId);
+        let credentials = yield registerApp(oidcIssuer);
+        console.log('Successfully created credentials!');
+        let identity = (0, readline_sync_1.question)('Identity name: ');
+        (0, keytar_1.setPassword)('solid-curl', identity, JSON.stringify({
+            webId: webId,
+            oidcIssuer: oidcIssuer,
+            id: credentials.id,
+            secret: credentials.secret
+        }));
+    });
+}
+function deleteUser(identity) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let creds = yield (0, keytar_1.getPassword)('solid-curl', identity);
+        if (creds == null) {
+            throw Error('Identity "' + identity + '" not found!');
         }
-    }
-    */
-        // Redirect Handler: Fill out the login form
-        function handleRedirect(url) {
-            return __awaiter(this, void 0, void 0, function* () {
-                const browser = yield puppeteer_1.default.launch();
-                const page = yield browser.newPage();
-                loglevel_1.default.info(`* Fetching login page provided by IdP: ${url}`);
-                yield page.goto(url);
-                let emailField = yield page.$('#email');
-                if (emailField) {
-                    let email = configEmail; // ? configEmail : readlineSync.question(`${emailLabel}: `);
-                    loglevel_1.default.info(`* Entering email to form: ${email}`);
-                    yield emailField.type(email);
+        let credsParsed = JSON.parse(creds);
+        let oidcIssuer = credsParsed['oidcIssuer'];
+        let clientId = credsParsed['id'];
+        yield deregisterApp(oidcIssuer, clientId);
+        (0, keytar_1.deletePassword)('solid-curl', identity);
+    });
+}
+function registerApp(oidcIssuer) {
+    return __awaiter(this, void 0, void 0, function* () {
+        // Try Community Solid Server
+        let response = yield fetch(oidcIssuer + 'idp/credentials/');
+        if (response.status == 405) {
+            console.log('Authenticating with ' + oidcIssuer + ' (Community Solid Server):');
+            let email = (0, readline_sync_1.question)('E-Mail: ');
+            let password = (0, readline_sync_1.question)('Password: ', {
+                hideEchoBack: true
+            });
+            response = yield fetch(oidcIssuer + 'idp/credentials/', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    password: password,
+                    name: 'solid-curl'
+                })
+            });
+            if (response.status == 200) {
+                return yield response.json();
+            }
+            else {
+                throw Error(yield response.text());
+            }
+        }
+        throw Error('No client registration could be found for the OIDC issuer!');
+    });
+}
+function deregisterApp(oidcIssuer, clientId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        // Try Community Solid Server
+        let response = yield fetch(oidcIssuer + 'idp/credentials/');
+        if (response.status == 405) {
+            console.log('Authenticating with ' + oidcIssuer + ' (Community Solid Server):');
+            let email = (0, readline_sync_1.question)('E-Mail: ');
+            let password = (0, readline_sync_1.question)('Password: ', {
+                hideEchoBack: true
+            });
+            response = yield fetch(oidcIssuer + 'idp/credentials/', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    password: password,
+                    delete: clientId
+                })
+            });
+            if (response.status == 200) {
+                return yield response.json();
+            }
+            else {
+                throw Error(yield response.text());
+            }
+        }
+        throw Error('No client registration could be found for the OIDC issuer!');
+    });
+}
+function getOIDCIssuer(webId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let response = yield fetch(webId);
+        let quads = yield parseQuads(yield response.text());
+        let store = new n3_1.Store();
+        store.addQuads(quads);
+        let issuers = store.getObjects(namedNode(webId), namedNode('http://www.w3.org/ns/solid/terms#oidcIssuer'), null);
+        if (issuers.length > 0) {
+            return issuers[0].value;
+        }
+        else {
+            throw Error('No OIDC issuer in Profile Document found!');
+        }
+    });
+}
+function parseQuads(text) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return new Promise((resolve, reject) => {
+            let quads = [];
+            let parser = new n3_1.Parser();
+            parser.parse(text, (error, quad) => {
+                if (error) {
+                    reject(error);
                 }
-                let usernameField = (yield page.$('#username')) || (yield page.$('#signInFormUsername'));
-                if (usernameField) {
-                    let username = configUsername; // ? configUsername : readlineSync.question(`${usernameLabel}: `);
-                    loglevel_1.default.info(`* Entering username to form: ${username}`);
-                    yield usernameField.type(username);
-                }
-                let passwordField = (yield page.$('#password')) || (yield page.$('#signInFormPassword'));
-                if (passwordField) {
-                    let password = configPassword; // ? configPassword : readlineSync.question(`${passwordLabel}: `, {
-                    //	hideEchoBack: true,
-                    //});
-                    loglevel_1.default.info(`* Entering password to form: ${password.replaceAll(new RegExp('.', 'g'), '*')}`);
-                    yield passwordField.type(password);
-                }
-                let resP = Promise.race([
-                    page.waitForNavigation(),
-                    new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
-                ]);
-                let submit = (yield page.$('button[type=submit]')) || (yield page.$('input[type=Submit]'));
-                loglevel_1.default.info(`* Submitting login form`);
-                yield (submit === null || submit === void 0 ? void 0 : submit.click());
-                let res = yield resP;
-                if (res === null) {
-                    loglevel_1.default.error('Authentication did not succeed: Timed out!');
-                    process_1.default.exit(1);
+                if (quad) {
+                    quads.push(quad);
                 }
                 else {
-                    // node-solid-server may redirect to another form that needs a submit
-                    if (res.status() !== 200) {
-                        loglevel_1.default.error(`Authentication did not succeed: ${res.status()} ${res.statusText()}`);
-                        process_1.default.exit(2);
-                    }
-                    else {
-                        let submit = (yield page.$('button[type=submit]')) || (yield page.$('button[form=approve]'));
-                        if (submit) {
-                            loglevel_1.default.info(`* Pressing button to allow our application`);
-                            submit.click();
-                            yield page.waitForNavigation();
-                        }
-                    }
+                    resolve(quads);
                 }
-                yield browser.close();
             });
-        }
+        });
     });
 }
 function doFetch(uri, fetchInit, headers, session, outStream, include) {
@@ -201,7 +281,7 @@ function doFetch(uri, fetchInit, headers, session, outStream, include) {
             for (let h of res.headers) {
                 loglevel_1.default.info(`< ${h[0].split('-').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}: ${h[1]}`);
                 if (include) {
-                    outStream.write(`${'\033[1m'}${h[0].split('-').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}${'\033[0m'}: ${h[1]}\n`);
+                    outStream.write(`${'\x1b[1m'}${h[0].split('-').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('-')}${'\x1b[0m'}: ${h[1]}\n`);
                 }
             }
             if (include) {

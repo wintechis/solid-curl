@@ -1,13 +1,20 @@
 import express from 'express';
 import { Session } from '@inrupt/solid-client-authn-node';
-import puppeteer, { HTTPResponse } from 'puppeteer';
 import process from 'process';
 import { program } from 'commander';
 import { createReadStream } from 'fs';
 import logger from 'loglevel';
 import { Writable } from 'stream';
+import { deletePassword, findCredentials, getPassword, setPassword } from 'keytar';
+import { question } from 'readline-sync';;
+import { Parser, Quad, Store, DataFactory } from 'n3';
+import { printTable } from 'console-table-printer';
 import os from 'os';
 import fs from 'fs';
+
+const { namedNode } = DataFactory;
+
+const version = '0.1.6';
 
 // Remove draft warning from oidc-client lib
 process.emitWarning = () => {
@@ -16,7 +23,7 @@ process.emitWarning = () => {
 
 // Command line arguments
 program
-	.version('0.1.6', '-V, --version', 'Show version number and quit')
+	.version(version, '-V, --version', 'Show version number and quit')
 	.argument('<uri>', 'Target URI')
 	.option('-d, --data <data>', 'HTTP POST data')
 	//.option('-f, --fail', 'Fail silently (no output at all) on HTTP errors')
@@ -27,11 +34,26 @@ program
 	//.option('-O, --remote-name', 'Write output to a file named as the remote file')
 	.option('-s, --silent', 'Silent mode')
 	//.option('-T, --transfer-file <file>', 'Transfer local FILE to destination')
-	.option('-u, --user <identity>', 'Use identity from config file')
+	.option('-u, --user <identity>', 'Use stored identity')
+	.option('-u, -- <identity>', 'Use stored identity')
 	//.option('-A, --user-agent <name>', 'Send User-Agent <name> to server')
 	.option('-v, --verbose', 'Make the operation more talkative')
 	.option('-X, --request <method>', 'Specify custom request method', 'GET')
 	.action(run);
+	
+program
+	.command('register-user')
+	.argument('<uri>', 'WebID')
+	.action(registerUser);
+	
+program
+	.command('delete-user')
+	.argument('<identity>', 'Identity name')
+	.action(deleteUser);
+
+program
+	.command('list-users')
+	.action(listUsers);
 
 program.parseAsync();
 
@@ -46,7 +68,7 @@ async function run(uri: string, options: any) {
 	const session = new Session();
 	let headers: Record<string,string> = {
 		'accept': 'text/turtle, */*;q=0.8',
-		'user-agent': 'solid-curl/0.1.0',
+		'user-agent': 'solid-curl/' + version,
 		'accept-encoding': 'gzip,deflate',
 		'connection': 'close',
 		'host': uri.split('/').slice(2,3).join()
@@ -85,105 +107,162 @@ async function run(uri: string, options: any) {
 		process.exit();
 	}
 
-	const app = express();
-	let server = null;
-
-	// Handler for the redirect from the IdP
-	app.get("/", async (req, expressRes) => {
-		logger.info(`* Received redirect from IdP to: ${req.url}`);
-		await session.handleIncomingRedirect(`http://localhost:29884${req.url}`);
-		expressRes.sendStatus(200);
-
-		logger.info(`* Doing actual request authenticated as ${session.info.webId}`);
-		await doFetch(uri, fetchInit, headers, session, process.stdout, options?.include);
-		process.exit();
-	});
-	server = app.listen(29884);
-
-	// Try to load credentials from config
-	const config = JSON.parse(fs.readFileSync(`${os.homedir()}/.solid-curl-ids.json`).toString());
-	const {
-		oidcProvider: configOidcProvider,
-		email: configEmail,
-		username: configUsername,
-		password: configPassword,
-	} = config[options.user];
-	logger.info(`* Loaded credentials of identity ${options.user} from config file`);
+	// Get credentials from storage
+	let credentials = await findCredentials('solid-curl');
+	if(!credentials.some(c => c.account === user)) {
+		logger.error('No credentials with name \'' + user + '\' found!');
+		process.exit(1);
+	}
+	let creds = JSON.parse(credentials.find(c => c.account === user)!.password);
 
 	// Log in
-	let oidcIssuer = configOidcProvider// ? configOidcProvider : readlineSync.question(`Solid OIDC Provider URI: `);
+	let oidcIssuer = creds['oidcIssuer'];
 	logger.info(`* Initiating OIDC login at ${oidcIssuer}`);
 	await session.login({
-		redirectUrl: 'http://localhost:29884/',
 		oidcIssuer: oidcIssuer,
-		handleRedirect: handleRedirect,
+		clientId: creds['id'],
+		clientSecret: creds['secret']
 	});
-		/*
-	} catch (e) {
-		if (e.code !== 'MODULE_NOT_FOUND') {
-			throw e;
-		}
+
+	await doFetch(uri, fetchInit, headers, session, process.stdout, options?.include);
+	process.exit();
+}
+
+async function listUsers() {
+	let credentials = await findCredentials('solid-curl');
+	let prettyCredentials = credentials.map(c => {
+		let creds = JSON.parse(c.password);
+		return {
+			Identity: c.account,
+			WebID: creds['webId'],
+			'OIDC Issuer': creds['oidcIssuer'],
+			ClientID: creds['id']
+		};
+	});
+	printTable(prettyCredentials);
+}
+
+async function registerUser(webId: string) {
+	let oidcIssuer = await getOIDCIssuer(webId);
+	let credentials = await registerApp(oidcIssuer);
+	console.log('Successfully created credentials!')
+	let identity = question('Identity name: ')
+	setPassword('solid-curl', identity, JSON.stringify({
+		webId: webId,
+		oidcIssuer: oidcIssuer,
+		id: credentials.id,
+		secret: credentials.secret
+	}));
+}
+
+async function deleteUser(identity: string) {
+	let creds = await getPassword('solid-curl', identity);
+	if(creds == null) {
+		throw Error('Identity "' + identity + '" not found!');
 	}
-	*/
+	let credsParsed = JSON.parse(creds);
+	let oidcIssuer = credsParsed['oidcIssuer'];
+	let clientId = credsParsed['id'];
 
-	// Redirect Handler: Fill out the login form
-	async function handleRedirect(url: string) {
-		const browser = await puppeteer.launch();
-		const page = await browser.newPage();
-		logger.info(`* Fetching login page provided by IdP: ${url}`);
-		await page.goto(url);
+	await deregisterApp(oidcIssuer, clientId);
+	deletePassword('solid-curl', identity);
+}
 
-		let emailField = await page.$('#email');
-		if(emailField) {
-			let email = configEmail// ? configEmail : readlineSync.question(`${emailLabel}: `);
-			logger.info(`* Entering email to form: ${email}`);
-			await emailField.type(email);
-		}
+interface ClientCredentials {
+	id: string,
+	secret: string
+}
 
-		let usernameField = await page.$('#username') || await page.$('#signInFormUsername');
-		if(usernameField) {
-			let username = configUsername// ? configUsername : readlineSync.question(`${usernameLabel}: `);
-			logger.info(`* Entering username to form: ${username}`);
-			await usernameField.type(username);
-		}
+async function registerApp(oidcIssuer: string): Promise<ClientCredentials> {
+	// Try Community Solid Server
+	let response = await fetch(oidcIssuer + 'idp/credentials/')
+	if(response.status == 405) {
+		console.log('Authenticating with ' + oidcIssuer + ' (Community Solid Server):');
+		let email = question('E-Mail: ');
+		let password = question('Password: ', {
+			hideEchoBack: true
+		});
 
-		let passwordField = await page.$('#password') || await page.$('#signInFormPassword');
-		if(passwordField) {
-			let password = configPassword// ? configPassword : readlineSync.question(`${passwordLabel}: `, {
-			//	hideEchoBack: true,
-			//});
-			logger.info(`* Entering password to form: ${password.replaceAll(new RegExp('.', 'g'), '*')}`);
-			await passwordField.type(password);
-		}
-
-		let resP = Promise.race([
-			page.waitForNavigation(),
-			new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
-		]);
-		let submit = await page.$('button[type=submit]') || await page.$('input[type=Submit]'); 
-		logger.info(`* Submitting login form`);
-		await submit?.click();
-		let res = await resP;
-
-		if(res === null) {
-			logger.error('Authentication did not succeed: Timed out!');
-			process.exit(1);
+		response = await fetch(oidcIssuer + 'idp/credentials/', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				email: email,
+				password: password,
+				name: 'solid-curl'
+			})
+		});
+		
+		if(response.status == 200) {
+			return await response.json();
 		} else {
-			// node-solid-server may redirect to another form that needs a submit
-			if((res as HTTPResponse).status() !== 200) {
-				logger.error(`Authentication did not succeed: ${(res as HTTPResponse).status()} ${(res as HTTPResponse).statusText()}`);
-				process.exit(2);
-			} else {
-				let submit = await page.$('button[type=submit]') || await page.$('button[form=approve]');
-				if(submit) {
-					logger.info(`* Pressing button to allow our application`);
-					submit.click();
-					await page.waitForNavigation();
-				}
-			}
+			throw Error(await response.text());
 		}
-		await browser.close();
 	}
+
+	throw Error('No client registration could be found for the OIDC issuer!');
+}
+
+async function deregisterApp(oidcIssuer: string, clientId: string) {
+	// Try Community Solid Server
+	let response = await fetch(oidcIssuer + 'idp/credentials/')
+	if(response.status == 405) {
+		console.log('Authenticating with ' + oidcIssuer + ' (Community Solid Server):');
+		let email = question('E-Mail: ');
+		let password = question('Password: ', {
+			hideEchoBack: true
+		});
+
+		response = await fetch(oidcIssuer + 'idp/credentials/', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				email: email,
+				password: password,
+				delete: clientId
+			})
+		});
+		
+		if(response.status == 200) {
+			return await response.json();
+		} else {
+			throw Error(await response.text());
+		}
+	}
+
+	throw Error('No client registration could be found for the OIDC issuer!');
+}
+
+async function getOIDCIssuer(webId: string): Promise<string> {
+	let response = await fetch(webId);
+	let quads = await parseQuads(await response.text());
+	let store = new Store();
+	store.addQuads(quads);
+	let issuers = store.getObjects(namedNode(webId), namedNode('http://www.w3.org/ns/solid/terms#oidcIssuer'), null);
+
+	if(issuers.length > 0) {
+		return issuers[0].value;
+	} else {
+		throw Error('No OIDC issuer in Profile Document found!');
+	}
+}
+
+async function parseQuads(text: string): Promise<Quad[]> {
+	return new Promise((resolve, reject) => {
+		let quads: Quad[] = [];
+		let parser = new Parser();
+		
+		parser.parse(text, (error, quad) => {
+			if(error) {
+				reject(error);
+			}
+			if(quad) {
+				quads.push(quad);
+			} else {
+				resolve(quads);
+			}
+		});
+	});
 }
 
 async function doFetch(uri: string, fetchInit: RequestInit, headers: Record<string,string>, session: Session, outStream: Writable, include: boolean) {
