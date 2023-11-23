@@ -229,10 +229,11 @@ function deregisterApp(oidcIssuer, clientId) {
 function getOIDCIssuer(webId) {
     return __awaiter(this, void 0, void 0, function* () {
         let response = yield fetch(webId);
-        let quads = yield parseQuads(yield response.text());
+        let quads = yield parseResponse(response);
         let store = new n3_1.Store();
         store.addQuads(quads);
         let issuers = store.getObjects(namedNode(webId), namedNode('http://www.w3.org/ns/solid/terms#oidcIssuer'), null);
+        console.log(store.getQuads(null, namedNode('http://www.w3.org/ns/solid/terms#oidcIssuer'), null, null));
         if (issuers.length > 0) {
             return issuers[0].value;
         }
@@ -241,11 +242,14 @@ function getOIDCIssuer(webId) {
         }
     });
 }
-function parseQuads(text) {
+function parseResponse(response) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             let quads = [];
-            let parser = new n3_1.Parser();
+            let parser = new n3_1.Parser({
+                baseIRI: response.url
+            });
+            let text = yield response.text();
             parser.parse(text, (error, quad) => {
                 if (error) {
                     reject(error);
@@ -257,7 +261,7 @@ function parseQuads(text) {
                     resolve(quads);
                 }
             });
-        });
+        }));
     });
 }
 function doFetch(uri, fetchInit, headers, session, outStream, include) {

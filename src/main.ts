@@ -237,7 +237,7 @@ async function deregisterApp(oidcIssuer: string, clientId: string) {
 
 async function getOIDCIssuer(webId: string): Promise<string> {
 	let response = await fetch(webId);
-	let quads = await parseQuads(await response.text());
+	let quads = await parseResponse(response);
 	let store = new Store();
 	store.addQuads(quads);
 	let issuers = store.getObjects(namedNode(webId), namedNode('http://www.w3.org/ns/solid/terms#oidcIssuer'), null);
@@ -249,10 +249,13 @@ async function getOIDCIssuer(webId: string): Promise<string> {
 	}
 }
 
-async function parseQuads(text: string): Promise<Quad[]> {
-	return new Promise((resolve, reject) => {
+async function parseResponse(response: Response): Promise<Quad[]> {
+	return new Promise(async (resolve, reject) => {
 		let quads: Quad[] = [];
-		let parser = new Parser();
+		let parser = new Parser({
+			baseIRI: response.url
+		});
+		let text: string = await response.text();
 		
 		parser.parse(text, (error, quad) => {
 			if(error) {
