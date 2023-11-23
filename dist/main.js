@@ -26,8 +26,11 @@ const mime_types_1 = require("mime-types");
 const { namedNode } = n3_1.DataFactory;
 const version = '0.1.6';
 // Remove draft warning from oidc-client lib
-process_1.default.emitWarning = () => {
-    return;
+process_1.default.emitWarning = (warning, ...args) => {
+    if (args[0] === 'DraftWarning') {
+        return;
+    }
+    return process_1.default.emitWarning(warning, ...args);
 };
 // Command line arguments
 commander_1.program

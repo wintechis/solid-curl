@@ -15,8 +15,11 @@ const { namedNode } = DataFactory;
 const version = '0.1.10';
 
 // Remove draft warning from oidc-client lib
-process.emitWarning = () => {
-	return;
+process.emitWarning = (warning: any, ...args: any) => {
+	if (args[0] === 'DraftWarning') {
+		return;
+	}
+	return process.emitWarning(warning, ...args);
 };
 
 // Command line arguments
