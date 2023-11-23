@@ -13,7 +13,7 @@ npm install -g solid-curl
 
 ## Usage
 ```
-Usage: solid-curl [options] <uri>
+Usage: solid-curl [options] [command] <uri>
 
 Arguments:
   uri                       Target URI
@@ -25,28 +25,44 @@ Options:
   -i, --include             Include HTTP response headers in output
   -L, --location            Follow redirects
   -s, --silent              Silent mode
-  -u, --user <identity>     Use identity from config file
+  -u, --user <identity>     Use stored identity
+  -u, -- <identity>         Use stored identity
   -v, --verbose             Make the operation more talkative
-  -X, --request <method>    Specify custom request method (default: "GET")
+  -X, --request <method>    Specify custom request method
   -h, --help                display help for command
+
+Commands:
+  register-user <uri>
+  delete-user <identity>
+  list-users
+```
+```
+Usage: solid-curl register-user [options] <uri>
+
+Arguments:
+  uri         WebID
+
+Options:
+  -h, --help  display help for command
+```
+Usage: solid-curl delete-user [options] <identity>
+
+Arguments:
+  identity    Identity name
+
+Options:
+  -h, --help  display help for command
+```
+```
+Usage: solid-curl list-users [options]
+
+Options:
+  -h, --help  display help for command
 ```
 
 ## User Identities
-To use Solid-OIDC you have to specify an identity using the `-u` option. For every identity you first have to create it in a file named `.solid-curl-ids.json` in your home directory. An example file for the identities `dschraudner` and `community` could look like this:
-
+solid-curl saves user identities to the keyring. New users can be registered using
 ```
-{
-        "dschraudner": {
-                "oidcProvider": "https://solid.dschraudner.de/",
-                "email": "daniel@example.de",
-                "password": "myverysecretpassword"
-        },
-        "community": {
-                "oidcProvider": "https://solidcommunity.net/",
-                "username": "dschraudner",
-                "password": "anothersecretpassword"
-        }
-}
+solid-curl register-user <webId>
 ```
-
-**Note:** Make sure that your identity file is not readable for others e. g. by using `chmod 600 .solid-curl-ids.json`!
+The name that is given to the user in the following dialog can be used with the `-u` parameter to automatically authenticate the request.
