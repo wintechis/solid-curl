@@ -1,4 +1,3 @@
-import express from 'express';
 import { Session } from '@inrupt/solid-client-authn-node';
 import process from 'process';
 import { program } from 'commander';
@@ -10,12 +9,10 @@ import { question } from 'readline-sync';;
 import { Parser, Quad, Store, DataFactory } from 'n3';
 import { printTable } from 'console-table-printer';
 import { lookup } from 'mime-types';
-import os from 'os';
-import fs from 'fs';
 
 const { namedNode } = DataFactory;
 
-const version = '0.1.6';
+const version = '0.1.10';
 
 // Remove draft warning from oidc-client lib
 process.emitWarning = () => {
