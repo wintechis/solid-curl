@@ -13,7 +13,7 @@ npm install -g solid-curl
 
 ## Usage
 ```
-Usage: solid-curl [options] <uri>
+Usage: solid-curl [options] [command] <uri>
 
 Arguments:
   uri                       Target URI
@@ -26,9 +26,38 @@ Options:
   -L, --location            Follow redirects
   -s, --silent              Silent mode
   -u, --user <identity>     Use stored identity
+  -u, -- <identity>         Use stored identity
   -v, --verbose             Make the operation more talkative
-  -X, --request <method>    Specify custom request method (default: "GET")
+  -X, --request <method>    Specify custom request method
   -h, --help                display help for command
+
+Commands:
+  register-user <uri>
+  delete-user <identity>
+  list-users
+```
+```
+Usage: solid-curl register-user [options] <uri>
+
+Arguments:
+  uri         WebID
+
+Options:
+  -h, --help  display help for command
+```
+Usage: solid-curl delete-user [options] <identity>
+
+Arguments:
+  identity    Identity name
+
+Options:
+  -h, --help  display help for command
+```
+```
+Usage: solid-curl list-users [options]
+
+Options:
+  -h, --help  display help for command
 ```
 
 ## User Identities
