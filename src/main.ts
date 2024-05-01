@@ -12,7 +12,7 @@ import { lookup } from 'mime-types';
 
 const { namedNode } = DataFactory;
 
-const version = '0.1.10';
+const version = '0.1.11';
 
 // Remove draft warning from oidc-client lib
 process.emitWarning = (warning: any, ...args: any) => {
@@ -176,6 +176,10 @@ interface ClientCredentials {
 }
 
 async function registerApp(oidcIssuer: string): Promise<ClientCredentials> {
+	if(!oidcIssuer.endsWith('/')) {
+		oidcIssuer += '/';
+	}
+
 	// Try Community Solid Server
 	let response = await fetch(oidcIssuer + 'idp/credentials/')
 	if(response.status == 405) {

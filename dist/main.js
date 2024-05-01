@@ -24,7 +24,7 @@ const n3_1 = require("n3");
 const console_table_printer_1 = require("console-table-printer");
 const mime_types_1 = require("mime-types");
 const { namedNode } = n3_1.DataFactory;
-const version = '0.1.6';
+const version = '0.1.11';
 // Remove draft warning from oidc-client lib
 process_1.default.emitWarning = (warning, ...args) => {
     if (args[0] === 'DraftWarning') {
@@ -173,6 +173,9 @@ function deleteUser(identity) {
 }
 function registerApp(oidcIssuer) {
     return __awaiter(this, void 0, void 0, function* () {
+        if (!oidcIssuer.endsWith('/')) {
+            oidcIssuer += '/';
+        }
         // Try Community Solid Server
         let response = yield fetch(oidcIssuer + 'idp/credentials/');
         if (response.status == 405) {
@@ -236,7 +239,6 @@ function getOIDCIssuer(webId) {
         let store = new n3_1.Store();
         store.addQuads(quads);
         let issuers = store.getObjects(namedNode(webId), namedNode('http://www.w3.org/ns/solid/terms#oidcIssuer'), null);
-        console.log(store.getQuads(null, namedNode('http://www.w3.org/ns/solid/terms#oidcIssuer'), null, null));
         if (issuers.length > 0) {
             return issuers[0].value;
         }
